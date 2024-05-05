@@ -7,12 +7,17 @@ use crate::Geom;
 use geo_types::{
     coord, point, Coord, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon,
 };
-use savvy::{ListSexp, RealSexp, Sexp, TypedSexp};
+use savvy::{ListSexp, RealSexp, Sexp};
 
 // TODO REMOVE SCALAR CLASSES
 /// Create a single `point` from an x and y value.
-pub fn geom_point(x: f64, y: f64) -> savvy::Result<Sexp> {
-    let mut out: Sexp = Geom::from(Point::new(x, y)).try_into()?;
+pub fn geom_point(x: RealSexp) -> savvy::Result<Sexp> {
+    if x.len() != 2 {
+        return Err("Point should be (x, y).".into());
+    }
+
+    let x_slice = x.as_slice();
+    let mut out: Sexp = Geom::from(Point::new(x_slice[0], x_slice[1])).try_into()?;
 
     out.set_class(["point", "Geom"])?;
     Ok(out)
@@ -80,7 +85,7 @@ pub fn geom_polygon(x: ListSexp) -> savvy::Result<Sexp> {
 pub fn geom_multipolygon(x: ListSexp) -> savvy::Result<Sexp> {
     let res = MultiPolygon::new(
         x.values_iter()
-            .map(|x| Ok(polygon_inner(x.try_into()?)?))
+            .map(|x| polygon_inner(x.try_into()?))
             .collect::<savvy::Result<Vec<Polygon>>>()?,
     );
 
@@ -120,7 +125,7 @@ pub fn matrix_to_coords(x: RealSexp) -> savvy::Result<Vec<Coord>> {
 }
 
 #[inline]
-fn to_index(i: i32, j: i32, nrow: i32) -> usize {
+pub(crate) fn to_index(i: i32, j: i32, nrow: i32) -> usize {
     (nrow * (j - 1) + i) as _
 }
 

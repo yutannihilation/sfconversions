@@ -1,8 +1,6 @@
-use extendr_api::prelude::*;
-
+pub mod constructors;
 pub mod fromsf;
 pub mod tosf;
-pub mod constructors;
 pub mod vctrs;
 
 use geo_types::{
@@ -11,12 +9,7 @@ use geo_types::{
 
 use geo::BoundingRect;
 use rstar::primitives::CachedEnvelope;
-
-extendr_module! {
-    mod sfconversions;
-    impl Geom;
-}
-
+use savvy::{savvy, ListSexp, Sexp};
 
 /// Implement RTreeObject for Geom
 impl rstar::RTreeObject for Geom {
@@ -41,23 +34,21 @@ impl rstar::RTreeObject for Geom {
 //     }
 // }
 
-
 /// The `Geom` struct is the backbone of sfconversions. It provides
 /// an itermediary between extendr and geo / geo_types as required
 /// by the orphan rule.
+#[savvy]
 #[derive(Debug, Clone)]
 pub struct Geom {
     /// a single field containing a geo_types [Geometry](https://docs.rs/geo-types/latest/geo_types/geometry/enum.Geometry.html) enum
     pub geom: Geometry,
 }
 
-
 /// Trait to convert objects to Geom structs
 pub trait IntoGeom {
     fn into_geom(self) -> Geom;
     fn cached_envelope(self) -> CachedEnvelope<Geom>;
 }
-
 
 /// Implement IntoGeom for any structs that have `From<T> for Geom`
 impl<T> IntoGeom for T
@@ -73,18 +64,13 @@ where
     }
 }
 
-
-#[extendr]
+#[savvy]
 impl Geom {
-    pub fn print(&self) -> String {
+    pub fn print(&self) -> savvy::Result<Sexp> {
         let fstr = format!("{:?}", self.geom);
-        fstr.splitn(2, '(')
-            .nth(1)
-            .unwrap_or("")
-            .to_string()
+        fstr.split_once('(').map(|x| x.1).unwrap_or("").try_into()
     }
 }
-
 
 // FROM geo-types to Geom
 /// Convert a Geometry enum to a Geom struct
@@ -150,7 +136,6 @@ impl From<Line> for Geom {
     }
 }
 
-
 // impl From<Geom> for MultiPolygon {
 //     fn from(geom: Geom) -> Self {
 //         let x = geom.geom;
@@ -184,57 +169,39 @@ impl From<Geom> for Point {
     }
 }
 
-/// extendr does not permit taking ownership of the pointers it creates
-/// for structs. This impl clones the struct to create an owned struct.
-impl From<Robj> for Geom {
-    fn from(robj: Robj) -> Self {
-        <&Geom>::from_robj(&robj)
-            .unwrap()
-            .clone()
-    }
-}
-
 // This is infallible. It requires that there are no missing geometries.
 // In the case that there are missing geometries, they must be handled
 // independently. This implementation clones the pointers
 // Missing geometries are recorded as a NULL (extendr_api::NULL)
-pub fn geoms_from_list(x: List) -> Vec<Option<Geom>> {
-    x
-        .into_iter()
-        .map(|(_, robj)| {
-
+pub fn geoms_from_list(x: ListSexp) -> savvy::Result<Vec<Option<Geom>>> {
+    x.values_iter()
+        .map(|robj| {
             if robj.is_null() {
-                None
+                Ok(None)
             } else {
-                Some(Geom::from(robj))
+                Geom::try_from(robj).map(Some)
             }
         })
-        .collect::<Vec<Option<Geom>>>()
+        .collect()
 }
 
-pub fn geoms_ref_from_list(x: List) -> Vec<Option<&'static Geom>> {
-    x
-    .into_iter()
-    .map(|(_, robj)| {
-
-        if robj.is_null() {
-            None
-        } else {
-            Some(<&Geom>::from_robj(&robj).unwrap())
-        }
-    })
-    .collect::<Vec<Option<&Geom>>>()
-
-}
-
-
-pub fn geometry_from_list(x: List) -> Vec<Option<Geometry>> {
-    x
-        .into_iter()
-        .map(|(_, xi)| {
-            match <&Geom>::from_robj(&xi) {
-                Ok(g) => Some(g.geom.clone()),
-                Err(_) => None
+pub fn geoms_ref_from_list(x: ListSexp) -> savvy::Result<Vec<Option<&'static Geom>>> {
+    x.values_iter()
+        .map(|robj| {
+            if robj.is_null() {
+                Ok(None)
+            } else {
+                <&Geom>::try_from(robj).map(Some)
             }
-        }).collect::<Vec<Option<Geometry>>>()
+        })
+        .collect()
+}
+
+pub fn geometry_from_list(x: ListSexp) -> savvy::Result<Vec<Option<Geometry>>> {
+    x.values_iter()
+        .map(|xi| match <&Geom>::try_from(xi) {
+            Ok(g) => Ok(Some(g.geom.clone())),
+            Err(_) => Ok(None),
+        })
+        .collect()
 }
