@@ -11,10 +11,11 @@ authors = ["Josiah Parry"]
 
 
 [dependencies]
-extendr-api = '>=0.4.0'
+savvy = { git = "https://github.com/yutannihilation/savvy" }
+savvy-ffi = { git = "https://github.com/yutannihilation/savvy" }
 geo = ">=0.26.0"
-geo-types = {version = ">=0.6.0", features = ["use-rstar_0_11"] }
-rstar = {version = ">=0.11.0" }
+geo-types = { version = ">=0.6.0", features = ["use-rstar_0_11"] }
+rstar = { version = ">=0.11.0" }
 
 [lib]
 crate-type = ["staticlib", "lib"]
